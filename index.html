@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plataforma de Deveres & Documentos (IndexedDB)</title>
+<style>
+:root{--bg:#0f1720;--card:#111827;--accent:#06b6d4;--muted:#9ca3af;--success:#10b981}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;}
+body{background:var(--bg);color:#e6eef6;}
+header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.05);}
+h1{font-size:20px;}
+.container{max-width:1100px;margin:20px auto;padding:16px;}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px;}
+.card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 24px rgba(2,6,23,.6);}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px;}
+input[type=text], textarea, input[type=date], select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.02);color:inherit;font-size:14px;}
+textarea{min-height:90px;resize:vertical;}
+.row{display:flex;gap:8px;}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--accent);color:#042027;border:none;cursor:pointer;font-weight:600;}
+.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.06);color:var(--muted);}
+.small{font-size:13px;color:var(--muted);}
+.toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.filters{display:flex;gap:8px;}
+.list{display:grid;gap:10px;}
+.item{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,.01), rgba(0,0,0,.06));border:1px solid rgba(255,255,255,.02);}
+.item .meta{flex:1;}
+.title{font-weight:700;font-size:15px;}
+.desc{color:var(--muted);font-size:13px;margin-top:6px;}
+.tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;}
+.tag{background:rgba(255,255,255,.03);padding:6px 8px;border-radius:999px;font-size:12px;color:var(--muted);}
+.actions{display:flex;flex-direction:column;gap:8px;}
+.badge{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03);font-size:12px;}
+.completed{background:linear-gradient(90deg,#052e2a,#073b2f);color:var(--success);border:1px solid rgba(16,185,129,.12);}
+@media(max-width:880px){.grid{grid-template-columns:1fr;}}
+.viewer{position:fixed;inset:0;background:rgba(1,6,15,.8);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
+.viewer .box{width:90%;max-width:980px;height:80%;background:var(--card);border-radius:10px;padding:12px;display:flex;flex-direction:column;}
+.viewer iframe{flex:1;border-radius:8px;}
+</style>
+</head>
+<body>
+<header>
+<h1>Plataforma de Deveres & Documentos Enfermagem</h1>
+<div class="small">Salvamento local • Anexos grandes suportados • Export/Import JSON</div>
+</header>
+<main class="container">
+<div class="grid">
+<aside>
+<div class="card">
+<h3>Novo dever / Documento</h3>
+<div style="margin-top:8px">
+<label>Título</label>
+<input id="title" type="text" placeholder="Ex: Exercício de Matemática">
+</div>
+<div style="margin-top:8px">
+<label>Descrição</label>
+<textarea id="desc" placeholder="Detalhes, tópicos, instruções..."></textarea>
+</div>
+<div class="row" style="margin-top:8px">
+<div style="flex:1">
+<label>Data de entrega</label>
+<input id="due" type="date">
+</div>
+<div style="width:120px">
+<label>Prioridade</label>
+<select id="prio"><option value="normal">Normal</option><option value="alta">Alta</option><option value="baixa">Baixa</option></select>
+</div>
+</div>
+<div style="margin-top:8px">
+<label>Tags (separe com vírgula)</label>
+<input id="tagsInput" type="text" placeholder="ex: matemática, prova, capítulo 3">
+</div>
+<div style="margin-top:8px">
+<label>Anexos (PDF, imagens, TXT)</label>
+<input id="file" type="file" multiple>
+<div id="filesList" class="small" style="margin-top:8px">Nenhum anexo.</div>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px">
+<button id="addBtn" class="btn">Adicionar</button>
+<button id="clearBtn" class="btn ghost">Limpar</button>
+</div>
+<hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,.03)">
+<div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+<div>
+<button id="exportBtn" class="btn ghost">Exportar (.json)</button>
+<button id="importBtn" class="btn ghost">Importar</button>
+<input id="importFile" type="file" accept="application/json" style="display:none">
+</div>
+<div class="small">Armazenamento: <span id="storageUsage">—</span></div>
+</div>
+</div>
+</aside>
+<section>
+<div class="card">
+<div class="toolbar">
+<div style="display:flex;gap:8px;align-items:center">
+<input id="search" type="text" placeholder="Pesquisar por título, tags..." style="padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.04);background:transparent;color:inherit;min-width:220px">
+<select id="filter"><option value="all">Tudo</option><option value="pending">Pendente</option><option value="done">Concluído</option><option value="due-today">Vence hoje</option></select>
+</div>
+<div class="small">Total: <span id="count">0</span></div>
+</div>
+<div style="margin-top:8px" class="list" id="list"></div>
+</div>
+</section>
+</div>
+</main>
+<div id="viewer" class="viewer" style="display:none">
+<div class="box">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<strong id="viewerTitle">Visualizador</strong>
+<div>
+<button id="downloadBtn" class="btn ghost">Download</button>
+<button id="closeView" class="btn" style="margin-left:8px">Fechar</button>
+</div>
+</div>
+<iframe id="viewerFrame"></iframe>
+</div>
+</div>
+<script>
+// IndexedDB setup
+let db;
+const request = indexedDB.open('StudyPlatformDB',1);
+request.onupgradeneeded = e=>{
+  db=e.target.result;
+  if(!db.objectStoreNames.contains('tasks')){
+    const store=db.createObjectStore('tasks',{keyPath:'id'});
+    store.createIndex('title','title',{unique:false});
+  }
+};
+request.onsuccess=e=>{db=e.target.result; loadTasks();}
+request.onerror=e=>{alert('Erro ao abrir IndexedDB: '+e.target.errorCode);}
+
+// Funções utilitárias
+function uid(){return Math.random().toString(36).slice(2,9);}
+const titleEl=document.querySelector('#title');
+const descEl=document.querySelector('#desc');
+const dueEl=document.querySelector('#due');
+const tagsEl=document.querySelector('#tagsInput');
+const fileInput=document.querySelector('#file');
+const filesList=document.querySelector('#filesList');
+const listEl=document.querySelector('#list');
+const countEl=document.querySelector('#count');
+const searchEl=document.querySelector('#search');
+const filterEl=document.querySelector('#filter');
+let stagingFiles=[];
+
+fileInput.addEventListener('change',async e=>{
+  const files=Array.from(e.target.files);
+  for(const f of files){
+    const arrayBuffer=await f.arrayBuffer();
+    stagingFiles.push({name:f.name,type:f.type,data:arrayBuffer});
+  }
+  renderStagingFiles(); fileInput.value='';
+});
+function renderStagingFiles(){
+  if(stagingFiles.length===0){ filesList.innerText='Nenhum anexo.'; return;}
+  filesList.innerHTML=stagingFiles.map((f,i)=>`<div style="display:flex;justify-content:space-between;gap:12px"><div>${f.name}</div><div><button class="btn ghost" onclick="removeStaging(${i})">Remover</button></div></div>`).join('');
+}
+window.removeStaging=i=>{stagingFiles.splice(i,1);renderStagingFiles();}
+
+// Adicionar tarefa
+document.querySelector('#addBtn').addEventListener('click',()=>{ 
+  const title=titleEl.value.trim(); if(!title){alert('Título obrigatório'); return;}
+  const task={id:uid(),title,desc:descEl.value,due:dueEl.value||null,tags:tagsEl.value.split(',').map(t=>t.trim()).filter(Boolean),done:false,attachments:stagingFiles.slice()};
+  const tx=db.transaction('tasks','readwrite'); const store=tx.objectStore('tasks'); store.put(task);
+  tx.oncomplete=()=>{stagingFiles=[]; renderStagingFiles(); clearForm(); loadTasks();};
+});
+
+// Carregar tarefas
+function loadTasks(){
+  const tx=db.transaction('tasks','readonly'); const store=tx.objectStore('tasks'); const req=store.getAll();
+  req.onsuccess=e=>{
+    stateItems=e.target.result||[];
+    renderList();
+  }
+}
+let stateItems=[];
+function renderList(){
+  const q=searchEl.value.toLowerCase();
+  const filter=filterEl.value;
+  let items=stateItems.slice();
+  if(filter==='pending') items=items.filter(i=>!i.done);
+  if(filter==='done') items=items.filter(i=>i.done);
+  if(filter==='due-today'){const today=(new Date()).toISOString().slice(0,10); items=items.filter(i=>i.due===today);}
+  if(q) items=items.filter(i=>i.title.toLowerCase().includes(q)||(i.tags||[]).join(' ').toLowerCase().includes(q));
+  countEl.innerText=items.length;
+  listEl.innerHTML=items.map(it=>renderItem(it)).join('');
+}
+function renderItem(it){
+  const dueLabel=it.due?`<div class="small">Entrega: <strong>${it.due}</strong></div>`:'';
+  const tags=(it.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('');
+  const attachments=(it.attachments||[]).map((a,idx)=>`<button class="btn ghost" onclick="openAttachment('${it.id}',${idx})">${a.name}</button>`).join(' ');
+  return `<div class="item ${it.done?'completed':''}" id="item-${it.id}"><div class="meta"><div class="title">${it.title}</div><div class="desc">${it.desc||''}</div><div class="tags">${tags}</div><div style="margin-top:8px">${dueLabel}${attachments}</div></div><div class="actions"><div class="badge">${it.id}</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:6px"><button class="btn" onclick="toggleDone('${it.id}')">${it.done?'Desmarcar':'Marcar como feito'}</button><button class="btn ghost" onclick="deleteItem('${it.id}')">Excluir</button></div></div></div>`;
+}
+
+// Operações
+window.toggleDone=id=>{const tx=db.transaction('tasks','readwrite');const store=tx.objectStore('tasks');const req=store.get(id);req.onsuccess=e=>{const t=e.target.result; t.done=!t.done; store.put(t); tx.oncomplete=()=>loadTasks();};}
+window.deleteItem=id=>{if(!confirm('Excluir este item?'))return; const tx=db.transaction('tasks','readwrite'); const store=tx.objectStore('tasks'); store.delete(id); tx.oncomplete=()=>loadTasks();}
+window.openAttachment=(id,idx)=>{const tx=db.transaction('tasks','readonly'); const store=tx.objectStore('tasks'); store.get(id).onsuccess=e=>{const t=e.target.result; if(!t||!t.attachments[idx]){alert('Arquivo não encontrado');return;} const f=t.attachments[idx]; const blob=new Blob([f.data],{type:f.type}); const url=URL.createObjectURL(blob); const viewer=document.getElementById('viewer'); const iframe=document.getElementById('viewerFrame'); document.getElementById('viewerTitle').innerText=f.name; iframe.src=url; viewer.style.display='flex'; document.getElementById('downloadBtn').onclick=()=>{const a=document.createElement('a'); a.href=url; a.download=f.name; a.click();};};}
+document.getElementById('closeView').addEventListener('click',()=>{document.getElementById('viewer').style.display='none';});
+searchEl.addEventListener('input',renderList); filterEl.addEventListener('change',renderList);
+
+function clearForm(){titleEl.value='';descEl.value='';dueEl.value='';tagsEl.value='';stagingFiles=[];renderStagingFiles();}
+</script>
+</body>
+</html>
